@@ -77,6 +77,7 @@ import {
   turboSignConfigured,
   type TurboSignClient,
 } from "./services/turbosign.ts";
+import { setUpTurboSignWebhookOnce } from "./turbosign-webhook.ts";
 import {
   describeSignerCorrectedEvent,
   listAuditEventsForEnvelope,
@@ -2455,11 +2456,17 @@ export async function sendDraftEnvelope(
         height: page.heightPt,
         width: page.widthPt,
       })),
+      expiresInDays: input.expiresInDays,
       pdf: Buffer.from(source.body),
+      reminderIntervalDays: input.reminderIntervalDays,
       senderEmail: input.senderEmail,
       senderName: input.senderName,
       signers,
     });
+
+    // The first send through TurboSign also sets up the webhook that brings
+    // finished documents back. It never holds up or fails the send.
+    void setUpTurboSignWebhookOnce(database);
 
     if (result.outcome === "sent") {
       const turboSentAt = Math.floor(Date.now() / 1000);

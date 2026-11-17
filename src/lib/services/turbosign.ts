@@ -12,7 +12,7 @@
 // month. When that runs out, or a field has no TurboSign match, the envelope
 // is sent by SignuDoc as before.
 
-import { TurboSign } from "@turbodocx/sdk";
+import { TurboSign, TurboWebhooks } from "@turbodocx/sdk";
 
 import type { FieldType } from "../types/domain.ts";
 
@@ -147,16 +147,22 @@ export async function sendWithTurboSign({
   fields,
   pageSizes,
   pdf,
+  expiresInDays,
+  reminderIntervalDays,
   senderEmail,
   senderName,
   signers,
 }: {
   client?: TurboSignClient;
   documentName: string;
+  /** The sender's deadline, in days from now. */
+  expiresInDays?: number | null;
   fields: readonly FieldInput[];
   /** Each page's size in points, as the editor placed the fields on it. */
   pageSizes: readonly PageSize[];
   pdf: Buffer;
+  /** Days between automatic reminders, or none. */
+  reminderIntervalDays?: number | null;
   senderEmail: string;
   senderName: string;
   signers: readonly SignerInput[];
@@ -182,6 +188,27 @@ export async function sendWithTurboSign({
       // Per request, not in configure(): the SDK client is shared across requests.
       senderEmail,
       senderName,
+      // Explicit either way, so the TurboDocx org's own defaults never apply.
+      ...(reminderIntervalDays
+        ? {
+            maxReminders: -1, // SignuDoc reminds until the deadline.
+            reminderDelay: {
+              unit: "days" as const,
+              value: reminderIntervalDays,
+            },
+            reminderInterval: {
+              unit: "days" as const,
+              value: reminderIntervalDays,
+            },
+            remindersEnabled: true,
+          }
+        : { remindersEnabled: false }),
+      ...(expiresInDays
+        ? {
+            expirationEnabled: true,
+            expireAfter: { unit: "days" as const, value: expiresInDays },
+          }
+        : { expirationEnabled: false }),
     });
 
     return { documentId: result.documentId, outcome: "sent" };
@@ -202,8 +229,131 @@ export async function sendWithTurboSign({
 /** The signed PDF, once every signer has signed. */
 export async function downloadTurboSignPdf(
   documentId: string,
+  client: Pick<typeof TurboSign, "download"> = turboSignClient(),
 ): Promise<Buffer> {
-  const blob = await turboSignClient().download(documentId);
+  const blob = await client.download(documentId);
 
   return Buffer.from(await blob.arrayBuffer());
+}
+
+/** Reminds whoever's turn it is, now. Returns how many were emailed. */
+export async function remindWithTurboSign({
+  client,
+  documentId,
+}: {
+  client?: {
+    sendReminder: (
+      documentId: string,
+    ) => Promise<{ results: { status: string }[] }>;
+  };
+  documentId: string;
+}): Promise<{ reminded: number }> {
+  const sdk = client ?? turboSignClient();
+  const { results } = await sdk.sendReminder(documentId);
+
+  return { reminded: results.filter((r) => r.status === "sent").length };
+}
+
+// The webhook that brings finished documents back.
+
+export const TURBOSIGN_WEBHOOK_PATH = "/api/turbosign/webhook";
+const WEBHOOK_EVENTS = [
+  "signature.document.completed",
+  "signature.document.voided",
+];
+
+let webhooksConfigured = false;
+
+function turboWebhooksClient() {
+  if (!webhooksConfigured) {
+    TurboWebhooks.configure({
+      apiKey: process.env.TURBODOCX_API_KEY,
+      orgId: process.env.TURBODOCX_ORG_ID,
+    });
+    webhooksConfigured = true;
+  }
+
+  return TurboWebhooks;
+}
+
+type WebhookClient = {
+  createWebhook: (request: {
+    events: string[];
+    urls: string[];
+  }) => Promise<{ secret: string }>;
+  getWebhook: () => Promise<{ urls: string[] }>;
+  regenerateWebhookSecret: () => Promise<{ secret: string }>;
+};
+
+export type WebhookSetupResult =
+  | "created"
+  | "existing_webhook_untouched"
+  | "needs_admin_key"
+  | "needs_https"
+  | "ready"
+  | "secret_rotated";
+
+/**
+ * Makes sure TurboSign tells this install when a document is finished.
+ *
+ * A TurboDocx organization has one signature webhook, with one secret for
+ * all its URLs. So a webhook this install did not make is never changed:
+ * rotating its secret or adding a URL would break whoever else listens.
+ */
+export async function ensureTurboSignWebhook({
+  appUrl,
+  client,
+  hasSecret,
+  saveSecret,
+}: {
+  appUrl: string;
+  client?: WebhookClient;
+  hasSecret: boolean;
+  saveSecret: (secret: string) => Promise<void>;
+}): Promise<WebhookSetupResult> {
+  if (!appUrl.startsWith("https://")) {
+    return "needs_https";
+  }
+
+  const sdk = client ?? (turboWebhooksClient() as unknown as WebhookClient);
+  const ourUrl = new URL(TURBOSIGN_WEBHOOK_PATH, appUrl).toString();
+
+  try {
+    const existing = await sdk.getWebhook().catch((error: unknown) => {
+      if ((error as { statusCode?: number }).statusCode === 404) {
+        return null;
+      }
+
+      throw error;
+    });
+
+    if (!existing) {
+      const created = await sdk.createWebhook({
+        events: WEBHOOK_EVENTS,
+        urls: [ourUrl],
+      });
+      await saveSecret(created.secret);
+      return "created";
+    }
+
+    const onlyOurs = existing.urls.length === 1 && existing.urls[0] === ourUrl;
+
+    if (!onlyOurs) {
+      return "existing_webhook_untouched";
+    }
+
+    if (hasSecret) {
+      return "ready";
+    }
+
+    const rotated = await sdk.regenerateWebhookSecret();
+    await saveSecret(rotated.secret);
+    return "secret_rotated";
+  } catch (error) {
+    if ((error as { statusCode?: number }).statusCode === 403) {
+      return "needs_admin_key";
+    }
+
+    throw error;
+  }
 }
