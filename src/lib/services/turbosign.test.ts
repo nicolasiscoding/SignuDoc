@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { toTurboSignRequest } from "./turbosign.ts";
+import { sendWithTurboSign, toTurboSignRequest } from "./turbosign.ts";
 
 const signers = [
   { email: "b@example.org", id: "s2", name: "Bea", signOrder: 2 },
@@ -100,4 +100,102 @@ test("returns null when a field has no TurboSign match, so SignuDoc sends it", (
 
     assert.equal(request, null);
   }
+});
+
+// sendWithTurboSign, with the TurboSign client stubbed.
+
+type SentRequest = Record<string, unknown>;
+
+function stubClient(behavior: (request: SentRequest) => { documentId: string }) {
+  const calls: SentRequest[] = [];
+
+  return {
+    calls,
+    client: {
+      sendSignature: async (request: SentRequest) => {
+        calls.push(request);
+        return behavior(request);
+      },
+    },
+  };
+}
+
+function apiError(message: string, statusCode?: number, code?: string) {
+  return Object.assign(new Error(message), { code, statusCode });
+}
+
+const sendInput = {
+  documentName: "Lease",
+  fields: [
+    {
+      height: 0.05,
+      page: 1,
+      required: true,
+      signerId: "s1",
+      type: "signature" as const,
+      width: 0.25,
+      x: 0.1,
+      y: 0.5,
+    },
+  ],
+  pageSizes: letter,
+  pdf: Buffer.from("%PDF"),
+  senderEmail: "sam@example.org",
+  senderName: "Sam Sender",
+  signers,
+};
+
+test("a send TurboSign accepts returns its document id", async () => {
+  const stub = stubClient(() => ({ documentId: "doc-1" }));
+  const result = await sendWithTurboSign({ ...sendInput, client: stub.client });
+
+  assert.deepEqual(result, { documentId: "doc-1", outcome: "sent" });
+});
+
+test("the sender goes on each send, not in the shared client config", async () => {
+  const stub = stubClient(() => ({ documentId: "doc-1" }));
+
+  await sendWithTurboSign({ ...sendInput, client: stub.client });
+
+  assert.equal(stub.calls[0]?.senderEmail, "sam@example.org");
+  assert.equal(stub.calls[0]?.senderName, "Sam Sender");
+});
+
+test("the free plan running out is reported, not thrown", async () => {
+  for (const error of [
+    apiError("Signature limit exceeded", 402, "SignatureLimitExceeded"),
+    apiError("Payment required", 402),
+  ]) {
+    const stub = stubClient(() => {
+      throw error;
+    });
+
+    assert.deepEqual(
+      await sendWithTurboSign({ ...sendInput, client: stub.client }),
+      { outcome: "limit_reached" },
+    );
+  }
+});
+
+test("any other TurboSign error reaches the sender", async () => {
+  const stub = stubClient(() => {
+    throw apiError("Invalid API key", 401, "AuthenticationError");
+  });
+
+  await assert.rejects(
+    sendWithTurboSign({ ...sendInput, client: stub.client }),
+    /Invalid API key/,
+  );
+});
+
+test("an envelope with a dropdown never reaches TurboSign", async () => {
+  const stub = stubClient(() => ({ documentId: "doc-1" }));
+  const result = await sendWithTurboSign({
+    ...sendInput,
+    client: stub.client,
+    fields: [{ ...sendInput.fields[0]!, type: "dropdown" as const }],
+  });
+
+  assert.deepEqual(result, { outcome: "unsupported_fields" });
+  assert.equal(stub.calls.length, 0);
 });

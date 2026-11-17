@@ -13,7 +13,6 @@
 // is sent by SignuDoc as before.
 
 import { TurboSign } from "@turbodocx/sdk";
-import { PDFDocument } from "pdf-lib";
 
 import type { FieldType } from "../types/domain.ts";
 
@@ -109,19 +108,25 @@ export function toTurboSignRequest({
 
 let configured = false;
 
-function configureOnce() {
-  if (configured) {
-    return;
+/** The SDK client, configured once for the process. */
+function turboSignClient() {
+  if (!configured) {
+    // The sender goes on each send instead, so concurrent requests can't swap it.
+    TurboSign.configure({
+      apiKey: process.env.TURBODOCX_API_KEY,
+      orgId: process.env.TURBODOCX_ORG_ID,
+      skipSenderValidation: true,
+    });
+    configured = true;
   }
 
-  // The sender goes on each send instead, so concurrent requests can't swap it.
-  TurboSign.configure({
-    apiKey: process.env.TURBODOCX_API_KEY,
-    orgId: process.env.TURBODOCX_ORG_ID,
-    skipSenderValidation: true,
-  });
-  configured = true;
+  return TurboSign;
 }
+
+/** What sending needs from the SDK, so tests can stand in for it. */
+export type TurboSignClient = {
+  sendSignature: (request: never) => Promise<{ documentId: string }>;
+};
 
 export function turboSignConfigured(env = process.env): boolean {
   return Boolean(env.TURBODOCX_API_KEY && env.TURBODOCX_ORG_ID);
@@ -137,33 +142,35 @@ export type TurboSignSendResult =
  * switch to SignuDoc's own seal.
  */
 export async function sendWithTurboSign({
+  client,
   documentName,
   fields,
+  pageSizes,
   pdf,
   senderEmail,
   senderName,
   signers,
 }: {
+  client?: TurboSignClient;
   documentName: string;
   fields: readonly FieldInput[];
+  /** Each page's size in points, as the editor placed the fields on it. */
+  pageSizes: readonly PageSize[];
   pdf: Buffer;
   senderEmail: string;
   senderName: string;
   signers: readonly SignerInput[];
 }): Promise<TurboSignSendResult> {
-  const document = await PDFDocument.load(pdf, { ignoreEncryption: true });
-  // ponytail: ignores /Rotate; a rotated page would place fields rotated. Map through the rotation if that shows up.
-  const pageSizes = document.getPages().map((page) => page.getSize());
   const request = toTurboSignRequest({ fields, pageSizes, signers });
 
   if (!request) {
     return { outcome: "unsupported_fields" };
   }
 
-  configureOnce();
+  const sdk = (client ?? turboSignClient()) as typeof TurboSign;
 
   try {
-    const result = await TurboSign.sendSignature({
+    const result = await sdk.sendSignature({
       documentName,
       // The page size goes with each field; the SDK's Field type does not list it yet.
       fields: request.fields as Parameters<
@@ -196,8 +203,7 @@ export async function sendWithTurboSign({
 export async function downloadTurboSignPdf(
   documentId: string,
 ): Promise<Buffer> {
-  configureOnce();
-  const blob = await TurboSign.download(documentId);
+  const blob = await turboSignClient().download(documentId);
 
   return Buffer.from(await blob.arrayBuffer());
 }
