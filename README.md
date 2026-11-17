@@ -70,6 +70,12 @@ The dashboard shows each document as a card with its first page, its status (dra
 
 Open any envelope and choose Save as template. The template keeps the document, the fields and the signing order, with roles instead of names. Using it asks who signs this time and opens a draft ready to send.
 
+### A seal Adobe trusts, with TurboSign
+
+Out of the box SignuDoc seals with its own self-signed certificate, which Adobe Acrobat shows as "validity unknown". A certificate on the Adobe Approved Trust List (AATL) can't be loaded from a file, because its key has to stay in hardware.
+
+Set `TURBODOCX_API_KEY` and `TURBODOCX_ORG_ID` and simple-signature envelopes go out through [TurboSign](https://www.turbodocx.com/products/turbosign?utm_source=github&utm_medium=readme&utm_campaign=signudoc_fork): signers get TurboSign's signing link, and the signed PDF is sealed with an AATL certificate held in an HSM plus an RFC 3161 timestamp, so it opens as trusted in Adobe. The free plan covers 5 documents a month. After that, or for an envelope with dropdown or radio fields, SignuDoc sends it as before. Download the signed PDF from the envelope's page.
+
 ### Sealed, certified, and checkable by anyone
 
 When the last signer finishes, SignuDoc builds the signed PDF and an audit certificate, seals both, and emails them to every signer and copy recipient. Names and text in Latin, Greek, Cyrillic, Chinese, Japanese and Korean scripts are drawn correctly. Anyone can drop a copy on the Verify page to see whether it is exactly the file the site produced; the file never leaves their device, only its fingerprint does.

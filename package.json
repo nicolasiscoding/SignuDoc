@@ -30,6 +30,7 @@
     "@signpdf/signer-p12": "3.3.0",
     "@signpdf/signpdf": "3.3.0",
     "@signpdf/utils": "3.3.0",
+    "@turbodocx/sdk": "0.9.0",
     "@vercel/blob": "^2.9.0",
     "@vercel/functions": "^3.11.1",
     "better-auth": "^1.7.21",

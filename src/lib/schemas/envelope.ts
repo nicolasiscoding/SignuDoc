@@ -79,6 +79,8 @@ export const sendEnvelopeResponseSchema = z.object({
   notifiedSignerName: z.string().trim().min(1).max(160),
   redirectPath: z.string().trim().min(1),
   sentAt: unixTimestampSchema,
+  /** Sent through TurboSign, or sent by SignuDoc because its free plan ran out. */
+  turboSign: z.enum(["sent", "limit_reached"]).optional(),
 });
 
 export const voidEnvelopeResponseSchema = z.object({
