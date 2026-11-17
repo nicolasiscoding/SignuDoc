@@ -140,6 +140,11 @@ export function EnvelopeDetailShell({
   const [isDeletingDraft, setIsDeletingDraft] = useState(false);
   const [isSendingReminder, setIsSendingReminder] = useState(false);
   const [isVoidingEnvelope, setIsVoidingEnvelope] = useState(false);
+  const [isSendingTurboSignReminder, setIsSendingTurboSignReminder] =
+    useState(false);
+  const [turboSignReminderNote, setTurboSignReminderNote] = useState<
+    string | null
+  >(null);
   const [correctingSigner, setCorrectingSigner] =
     useState<EnvelopeDetailSigner | null>(null);
   const [voidReason, setVoidReason] = useState("");
@@ -596,15 +601,42 @@ export function EnvelopeDetailShell({
           </p>
         ) : null}
 
-        {turboSignDocumentId ? (
+        {turboSignDocumentId && activeRecord.status === "sent" ? (
           <div
             className="notice notice-success mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
             role="status"
           >
             <p>
-              Out for signature on TurboSign. The signed PDF is sealed with a
-              certificate Adobe trusts and a trusted timestamp.
+              {turboSignReminderNote ??
+                "Out for signature on TurboSign. When everyone has signed, the PDF is sealed with a certificate Adobe trusts and lands here."}
             </p>
+            <button
+              className="btn-quiet shrink-0"
+              disabled={isSendingTurboSignReminder}
+              onClick={async () => {
+                setIsSendingTurboSignReminder(true);
+                const response = await fetch(
+                  `/api/envelopes/${envelopeId}/turbosign`,
+                  { method: "POST" },
+                ).catch(() => null);
+                const payload = (await response?.json().catch(() => null)) as {
+                  error?: string;
+                  reminded?: number;
+                } | null;
+                setTurboSignReminderNote(
+                  !response?.ok
+                    ? (payload?.error ?? "The reminder could not be sent.")
+                    : payload?.reminded
+                      ? "Reminder sent through TurboSign."
+                      : "Nobody to remind right now.",
+                );
+                setIsSendingTurboSignReminder(false);
+              }}
+              type="button"
+            >
+              {isSendingTurboSignReminder ? "Sending..." : "Send reminder"}
+            </button>
+            {/* Without a webhook the envelope never completes here; this fetches it from TurboSign. */}
             <a
               className="btn-quiet shrink-0"
               href={`/api/envelopes/${envelopeId}/turbosign`}

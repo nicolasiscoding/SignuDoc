@@ -192,12 +192,23 @@ test("Send goes through TurboSign: the envelope is out, and SignuDoc emails no o
   const result = await sendDraftEnvelope(
     draft.userId,
     draft.envelopeId,
-    sender,
+    { ...sender, expiresInDays: 10, reminderIntervalDays: 2 },
     {
       database,
       turboSignClient: turboSign.client,
     },
   );
+
+  // The sender's deadline and reminders go with the send.
+  assert.equal(turboSign.calls[0]?.remindersEnabled, true);
+  assert.deepEqual(turboSign.calls[0]?.reminderInterval, {
+    unit: "days",
+    value: 2,
+  });
+  assert.deepEqual(turboSign.calls[0]?.expireAfter, {
+    unit: "days",
+    value: 10,
+  });
 
   assert.equal(result.turboSign, "sent");
   assert.deepEqual(await envelopeRow(draft.envelopeId), {
