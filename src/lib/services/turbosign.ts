@@ -107,6 +107,22 @@ export function toTurboSignRequest({
   };
 }
 
+let configured = false;
+
+function configureOnce() {
+  if (configured) {
+    return;
+  }
+
+  // The sender goes on each send instead, so concurrent requests can't swap it.
+  TurboSign.configure({
+    apiKey: process.env.TURBODOCX_API_KEY,
+    orgId: process.env.TURBODOCX_ORG_ID,
+    skipSenderValidation: true,
+  });
+  configured = true;
+}
+
 export function turboSignConfigured(env = process.env): boolean {
   return Boolean(env.TURBODOCX_API_KEY && env.TURBODOCX_ORG_ID);
 }
@@ -144,12 +160,7 @@ export async function sendWithTurboSign({
     return { outcome: "unsupported_fields" };
   }
 
-  TurboSign.configure({
-    apiKey: process.env.TURBODOCX_API_KEY,
-    orgId: process.env.TURBODOCX_ORG_ID,
-    senderEmail,
-    senderName,
-  });
+  configureOnce();
 
   try {
     const result = await TurboSign.sendSignature({
@@ -161,11 +172,19 @@ export async function sendWithTurboSign({
       file: pdf,
       fileName: `${documentName}.pdf`,
       recipients: request.recipients,
+      // Per request, not in configure(): the SDK client is shared across requests.
+      senderEmail,
+      senderName,
     });
 
     return { documentId: result.documentId, outcome: "sent" };
   } catch (error) {
-    if ((error as { code?: string }).code === "SignatureLimitExceeded") {
+    const { code, statusCode } = error as {
+      code?: string;
+      statusCode?: number;
+    };
+
+    if (code === "SignatureLimitExceeded" || statusCode === 402) {
       return { outcome: "limit_reached" };
     }
 
@@ -177,11 +196,7 @@ export async function sendWithTurboSign({
 export async function downloadTurboSignPdf(
   documentId: string,
 ): Promise<Buffer> {
-  TurboSign.configure({
-    apiKey: process.env.TURBODOCX_API_KEY,
-    orgId: process.env.TURBODOCX_ORG_ID,
-    skipSenderValidation: true,
-  });
+  configureOnce();
   const blob = await TurboSign.download(documentId);
 
   return Buffer.from(await blob.arrayBuffer());
