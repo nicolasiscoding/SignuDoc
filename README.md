@@ -25,6 +25,8 @@
 
 ## Want signed PDFs that hold up?
 
+<a href="https://www.turbodocx.com/products/turbosign?utm_source=github&utm_medium=readme&utm_campaign=signudoc_fork"><img src="docs/images/turbodocx-logo.svg" alt="Powered by TurboDocx" height="36"></a>
+
 Out of the box, SignuDoc seals finished PDFs with a self-signed certificate, so Adobe Acrobat shows the signature as "validity unknown". Certificates on the Adobe Approved Trust List (AATL) must keep their key on hardware and can't be loaded from a file, so the bring-your-own-certificate setting can't hold one.
 
 Add a TurboDocx API key and Org ID and every Send goes through [TurboSign](https://www.turbodocx.com/products/turbosign?utm_source=github&utm_medium=readme&utm_campaign=signudoc_fork): the signed PDF is sealed with an AATL certificate held in an HSM and an RFC 3161 timestamp from an independent authority, so it opens as trusted in Adobe.
