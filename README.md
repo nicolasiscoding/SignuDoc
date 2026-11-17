@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FNYLLON-SOFTWARE%2FSignuDoc&project-name=signudoc&repository-name=signudoc&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22resend%22%2C%22productSlug%22%3A%22resend-email%22%2C%22protocol%22%3A%22messaging%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%2C%7B%22type%22%3A%22blob%22%2C%22access%22%3A%22private%22%7D%5D&demo-title=SignuDoc&demo-description=Your%20own%20e-signature%20site.%20Upload%20a%20PDF%2C%20place%20fields%2C%20send%20signing%20links%2C%20and%20keep%20the%20signed%20copy%20with%20its%20audit%20certificate.&demo-url=https%3A%2F%2Fgithub.com%2FNYLLON-SOFTWARE%2FSignuDoc&demo-image=https%3A%2F%2Fraw.githubusercontent.com%2FNYLLON-SOFTWARE%2FSignuDoc%2Fmain%2Fdocs%2Fimages%2Fbanner.png"><img src="docs/images/deploy-to-vercel.svg" alt="Deploy to Vercel" height="32"></a><br>
+  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fnicolasiscoding%2FSignuDoc&project-name=signudoc&repository-name=signudoc&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22resend%22%2C%22productSlug%22%3A%22resend-email%22%2C%22protocol%22%3A%22messaging%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%2C%7B%22type%22%3A%22blob%22%2C%22access%22%3A%22private%22%7D%5D&demo-title=SignuDoc&demo-description=Your%20own%20e-signature%20site.%20Upload%20a%20PDF%2C%20place%20fields%2C%20send%20signing%20links%2C%20and%20keep%20the%20signed%20copy%20with%20its%20audit%20certificate.&demo-url=https%3A%2F%2Fgithub.com%2Fnicolasiscoding%2FSignuDoc&demo-image=https%3A%2F%2Fraw.githubusercontent.com%2FNYLLON-SOFTWARE%2FSignuDoc%2Fmain%2Fdocs%2Fimages%2Fbanner.png"><img src="docs/images/deploy-to-vercel.svg" alt="Deploy to Vercel" height="32"></a><br>
   <sub>or <a href="docs/deploy-with-an-agent.md">copy this to your LLM</a></sub>
 </p>
 
@@ -19,6 +19,23 @@
   <a href="#get-started">Get started</a> ·
   <a href="docs/self-hosting.md">Self-hosting guide</a>
 </p>
+
+> [!NOTE]
+> This is a fork of [SignuDoc](https://github.com/NYLLON-SOFTWARE/signudoc) by Kevin Rose and Nyllon Software, used under its MIT license. It adds one thing: sealing through TurboSign, so signed PDFs open as trusted in Adobe.
+
+## Want signed PDFs that hold up?
+
+Out of the box, SignuDoc seals finished PDFs with a self-signed certificate, so Adobe Acrobat shows the signature as "validity unknown". Certificates on the Adobe Approved Trust List (AATL) must keep their key on hardware and can't be loaded from a file, so the bring-your-own-certificate setting can't hold one.
+
+Add a TurboDocx API key and Org ID and every Send goes through [TurboSign](https://www.turbodocx.com/products/turbosign?utm_source=github&utm_medium=readme&utm_campaign=signudoc_fork): the signed PDF is sealed with an AATL certificate held in an HSM and an RFC 3161 timestamp from an independent authority, so it opens as trusted in Adobe.
+
+1. Get a free API key and your Org ID from your [TurboDocx dashboard](https://www.turbodocx.com/products/turbosign?utm_source=github&utm_medium=readme&utm_campaign=signudoc_fork).
+2. In your Vercel project, set `TURBODOCX_API_KEY` and `TURBODOCX_ORG_ID`.
+3. Redeploy. The next envelope you send goes through TurboSign.
+
+The free plan covers 5 documents every month. After that, SignuDoc falls back to its own self-signed seal, so sending never breaks.
+
+With TurboSign on, the PDF goes to TurboSign to be sealed and signers get TurboSign's signing link. Leave the two variables unset and everything stays in your own accounts, exactly as in the original.
 
 ## Why SignuDoc
 
