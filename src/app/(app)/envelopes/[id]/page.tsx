@@ -1,7 +1,10 @@
 import { EnvelopeDetailShell } from "@/components/envelopes/envelope-detail-shell";
 import { getAuthSession } from "@/lib/auth/server";
 import { getDb } from "@/lib/db/connection";
-import { getEnvelopeDetailDataForUser } from "@/lib/envelopes";
+import {
+  getEnvelopeDetailDataForUser,
+  getTurboSignDocumentIdForUser,
+} from "@/lib/envelopes";
 
 type EnvelopeDetailPageProps = {
   params: Promise<{
@@ -17,11 +20,15 @@ export default async function EnvelopeDetailPage({
   let detailRecord: Awaited<ReturnType<typeof getEnvelopeDetailDataForUser>> =
     null;
   let initialState: "error" | "not-found" | undefined;
+  let turboSignDocumentId: string | null = null;
 
   try {
     const session = await getAuthSession();
     detailRecord = session
       ? await getEnvelopeDetailDataForUser(session.user.id, id, getDb())
+      : null;
+    turboSignDocumentId = session
+      ? await getTurboSignDocumentIdForUser(session.user.id, id, getDb())
       : null;
     initialState = detailRecord ? undefined : "not-found";
   } catch {
@@ -34,6 +41,7 @@ export default async function EnvelopeDetailPage({
       initialState={initialState}
       key={id}
       record={detailRecord ?? undefined}
+      turboSignDocumentId={turboSignDocumentId}
     />
   );
 }

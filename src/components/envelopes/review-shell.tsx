@@ -80,7 +80,18 @@ function describeSignatureLevel(level: SignatureLevel, providerName: string) {
   }
 }
 
-function buildSuccessMessage(firstSignerName: string) {
+function buildSuccessMessage(
+  firstSignerName: string,
+  turboSign?: "sent" | "limit_reached",
+) {
+  if (turboSign === "sent") {
+    return `Envelope sent through TurboSign. ${firstSignerName} has been notified, and the signed PDF will open as trusted in Adobe.`;
+  }
+
+  if (turboSign === "limit_reached") {
+    return `Envelope sent. ${firstSignerName} has been notified. This month's 5 free TurboSign documents are used, so SignuDoc's own seal is used.`;
+  }
+
   return `Envelope sent. ${firstSignerName} has been notified.`;
 }
 
@@ -157,6 +168,7 @@ export function ReviewShell({
         error?: string;
         notifiedSignerName?: string;
         redirectPath?: string;
+        turboSign?: "sent" | "limit_reached";
       } | null;
 
       if (!response.ok) {
@@ -170,7 +182,7 @@ export function ReviewShell({
       const redirectPath = payload?.redirectPath || `/envelopes/${envelopeId}`;
 
       setIsConfirmationOpen(false);
-      setNotice(buildSuccessMessage(notifiedSignerName));
+      setNotice(buildSuccessMessage(notifiedSignerName, payload?.turboSign));
       setSendPhase("idle");
       sendTimeoutRef.current = window.setTimeout(() => {
         window.location.assign(redirectPath);

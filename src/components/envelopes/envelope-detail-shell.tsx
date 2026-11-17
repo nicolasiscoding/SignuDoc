@@ -40,6 +40,8 @@ type EnvelopeDetailShellProps = {
   envelopeId: string;
   initialState?: "error" | "not-found";
   record?: EnvelopeDetailData;
+  /** Set when the envelope went out through TurboSign. */
+  turboSignDocumentId?: string | null;
 };
 
 type EnvelopeStatus = "draft" | "sent" | "completed" | "declined" | "voided";
@@ -127,6 +129,7 @@ export function EnvelopeDetailShell({
   envelopeId,
   initialState,
   record,
+  turboSignDocumentId,
 }: EnvelopeDetailShellProps) {
   const [activeModal, setActiveModal] = useState<ModalState>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -591,6 +594,24 @@ export function EnvelopeDetailShell({
           <p className="mt-4 text-sm leading-6 text-(--secondary) lg:text-right">
             {reminderHelperText}
           </p>
+        ) : null}
+
+        {turboSignDocumentId ? (
+          <div
+            className="notice notice-success mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+            role="status"
+          >
+            <p>
+              Out for signature on TurboSign. The signed PDF is sealed with a
+              certificate Adobe trusts and a trusted timestamp.
+            </p>
+            <a
+              className="btn-quiet shrink-0"
+              href={`/api/envelopes/${envelopeId}/turbosign`}
+            >
+              Download signed PDF
+            </a>
+          </div>
         ) : null}
 
         {deadlineText ? (
