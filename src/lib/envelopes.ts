@@ -75,6 +75,7 @@ import { importPdfDocument } from "./services/document-import.ts";
 import {
   sendWithTurboSign,
   turboSignConfigured,
+  type TurboSignClient,
 } from "./services/turbosign.ts";
 import {
   describeSignerCorrectedEvent,
@@ -183,6 +184,8 @@ type CorrectSentEnvelopeSignerOptions = {
 
 type SendDraftEnvelopeOptions = {
   database?: DbPool;
+  /** Stands in for the TurboDocx SDK in tests. */
+  turboSignClient?: TurboSignClient;
 };
 
 type VoidEnvelopeOptions = {
@@ -2321,7 +2324,7 @@ export async function sendDraftEnvelope(
   userId: string,
   envelopeId: string,
   input: SendDraftEnvelopeInput,
-  { database = getDb() }: SendDraftEnvelopeOptions = {},
+  { database = getDb(), turboSignClient }: SendDraftEnvelopeOptions = {},
 ): Promise<SendDraftEnvelopeResult> {
   const envelope = await getEnvelopeByIdForUser(userId, envelopeId, database);
 
@@ -2442,9 +2445,16 @@ export async function sendDraftEnvelope(
 
   if (signatureLevel === "simple" && !part11 && turboSignConfigured()) {
     const source = await storageService.getObject(envelope.sourcePdfKey);
+    const pages = await listEnvelopePagesForEnvelopeId(envelopeId, database);
     const result = await sendWithTurboSign({
+      client: turboSignClient,
       documentName: envelope.title,
       fields,
+      // The page sizes the editor placed the fields on.
+      pageSizes: pages.map((page) => ({
+        height: page.heightPt,
+        width: page.widthPt,
+      })),
       pdf: Buffer.from(source.body),
       senderEmail: input.senderEmail,
       senderName: input.senderName,
